@@ -3,17 +3,17 @@ const cheerio = require('cheerio');
 const express = require('express');
 const mongoose = require('mongoose');
 const cors = require('cors');
+require('dotenv').config()
 
 const app = express();
-const PORT = process.env.PORT || 3004;
+const PORT = process.env.GLASSDOORPORT
 
 // Middleware
 app.use(cors());
 app.use(express.json());
 
 // MongoDB connection
-const mongoUri = 'mongodb://localhost:27017/glassdoor-job_listings';
-mongoose.connect(mongoUri, { useNewUrlParser: true, useUnifiedTopology: true });
+mongoose.connect(process.env.MONGO_URL_SCRAPING, { useNewUrlParser: true, useUnifiedTopology: true })
 
 const jobSchema = new mongoose.Schema({
     role: String,
@@ -28,11 +28,11 @@ const jobSchema = new mongoose.Schema({
     salary: String,
     logo: String
 
-});
+}, { collection: 'glassdoorjobs' });
 const Job = mongoose.model('Job', jobSchema);
 
 // API key and base Glassdoor URL
-const apiKey = '20e627e4cb8068c6ec82d73c9f6c469f';
+const apiKey = process.env.API_KEY
 const glassdoorUrl = 'https://www.glassdoor.de/Job/frankfurt-am-main-deutschland-software-engineer-jobs-SRCH_IL.0,29_IC2632180_KO30,47.htm';
 
 // Function to scrape a single page with user-specified job title and location

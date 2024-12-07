@@ -5,16 +5,16 @@ const mongoose = require('mongoose');
 const cors = require('cors');
 const axios = require('axios');
 const cheerio = require('cheerio'); // Use Cheerio for parsing
+require('dotenv').config()
 const app = express();
-const PORT = process.env.PORT || 3001;
+const PORT = process.env.LINKEDINPORT || 3001;
 
 // Middleware
 app.use(cors());
 app.use(express.json());
 
 // MongoDB connection
-const mongoUri = 'mongodb://localhost:27017/job_listings';
-mongoose.connect(mongoUri, { useNewUrlParser: true, useUnifiedTopology: true });
+mongoose.connect(process.env.MONGO_URL_SCRAPING, { useNewUrlParser: true, useUnifiedTopology: true })
 
 // Define Job schema and model
 const jobSchema = new mongoose.Schema({
@@ -24,7 +24,7 @@ const jobSchema = new mongoose.Schema({
     Link: String,
     Jobposted: String,
     Imagesrc: String
-});
+}, { collection: 'linkedinjobs' });
 
 const Job = mongoose.model('Job', jobSchema);
 
