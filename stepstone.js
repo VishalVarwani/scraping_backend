@@ -4,8 +4,9 @@ const express = require('express');
 const mongoose = require('mongoose');
 const cors = require('cors');
 require('dotenv').config()
+const router = express.Router();
+
 const app = express();
-const PORT = process.env.STEPSTONEPORT 
 
 // Middleware
 app.use(cors());
@@ -24,7 +25,7 @@ const jobSchema = new mongoose.Schema({
     imageSrc: String, 
     status: String
 },  { collection: 'stepstonejobs' });
-const Job = mongoose.model('Job', jobSchema);
+const Job = mongoose.models.StepStoneJob || mongoose.model('StepStoneJob', jobSchema);
 
 // API key and base URLs
 const apiKey = process.env.API_KEY
@@ -98,8 +99,8 @@ async function scrapePages(jobTitle, location, startPage, endPage) {
     return allJobs;
 }
 
-// Endpoint to fetch and store StepStone jobs
-app.post('/fetch-jobs', async (req, res) => {
+// Endpoint to fetch and store jobs
+router.post('/stepstone/fetch-jobs', async (req, res) => {
     const jobTitle = req.body.job_title || 'developer';
     const location = req.body.location || 'germany';
     const startPage = 1;
@@ -120,7 +121,7 @@ app.post('/fetch-jobs', async (req, res) => {
 });
 
 // Endpoint to get jobs
-app.get('/stepstone-get-jobs', async (req, res) => {
+router.get('/stepstone/stepstone-jobs', async (req, res) => {
     try {
         const jobs = await Job.find({}, { _id: 0 });
         res.json(jobs);
@@ -130,7 +131,4 @@ app.get('/stepstone-get-jobs', async (req, res) => {
     }
 });
 
-// Start the server
-app.listen(PORT, () => {
-    console.log(`Server is running on http://localhost:${PORT}`);
-});
+module.exports = router;

@@ -4,9 +4,9 @@ const express = require('express');
 const mongoose = require('mongoose');
 const cors = require('cors');
 require('dotenv').config()
+const router = express.Router();
 
 const app = express();
-const PORT = process.env.GLASSDOORPORT
 
 // Middleware
 app.use(cors());
@@ -29,7 +29,7 @@ const jobSchema = new mongoose.Schema({
     logo: String
 
 }, { collection: 'glassdoorjobs' });
-const Job = mongoose.model('Job', jobSchema);
+const Job = mongoose.models.GlassdoorJob || mongoose.model('GlassdoorJob', jobSchema);
 
 // API key and base Glassdoor URL
 const apiKey = process.env.API_KEY
@@ -127,8 +127,8 @@ async function scrapePages(jobTitle, location, startPage, endPage) {
     return allJobs;
 }
 
-// Endpoint to fetch and store Glassdoor jobs with search parameters
-app.post('/fetch-jobs', async (req, res) => {
+/// Endpoint to fetch jobs
+router.post('/glassdoor/fetch-jobs', async (req, res) => {
     const { job_title, location } = req.body;
 
     if (!job_title || !location) {
@@ -152,18 +152,15 @@ app.post('/fetch-jobs', async (req, res) => {
     }
 });
 
-// Endpoint to get jobs with search parameters
-app.get('/glassdoor-get-jobs', async (req, res) => {
+// Endpoint to get jobs
+router.get('/glassdoor/glassdoor-jobs', async (req, res) => {
     try {
         const jobs = await Job.find({}, { _id: 0 });
         res.json(jobs);
     } catch (error) {
-        console.error(error);
-        res.status(500).json({ error: 'Error fetching job listings. Please try again.' });
+        console.error('Error fetching jobs:', error);
+        res.status(500).json({ error: 'Failed to retrieve jobs.' });
     }
 });
 
-// Start the server
-app.listen(PORT, () => {
-    console.log(`Server is running on http://localhost:${PORT}`);
-});
+module.exports = router;

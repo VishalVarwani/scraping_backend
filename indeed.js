@@ -5,6 +5,8 @@ const mongoose = require('mongoose');
 const cors = require('cors');
 const { Worker } = require('worker_threads');
 require('dotenv').config()
+const router = express.Router();
+
 const app = express();
 const PORT = process.env.INDEEDPORT
 
@@ -97,37 +99,34 @@ const scrapeIndeedPagesConcurrently = async (jobTitle, location, startPage, endP
   };
   
 
-app.post('/fetch-jobs', async (req, res) => {
-  const jobTitle = req.body.job_title || 'developer';
-  const location = req.body.location || 'germany';
-  const startPage = 1;
-  const endPage = 10;
-
-  try {
-    const jobs = await scrapeIndeedPagesConcurrently(jobTitle, location, startPage, endPage);
-
-    // Clear previous jobs and save new ones
-    await Job.deleteMany({});
-    await Job.insertMany(jobs);
-
-    res.json({ message: 'Job fetching completed', jobCount: jobs.length });
-  } catch (error) {
-    console.error('Error fetching jobs:', error);
-    res.status(500).json({ error: 'Failed to fetch jobs. Please try again.' });
-  }
-});
-
-app.get('/indeed-get-jobs', async (req, res) => {
-  try {
+  router.post('/indeed/fetch-jobs', async (req, res) => {
+    const jobTitle = req.body.job_title || 'developer';
+    const location = req.body.location || 'germany';
+    const startPage = 1;
+    const endPage = 10;
+  
+    try {
+      const jobs = await scrapeIndeedPagesConcurrently(jobTitle, location, startPage, endPage);
+  
+      await Job.deleteMany({});
+      await Job.insertMany(jobs);
+  
+      res.json({ message: 'Job fetching completed', jobCount: jobs.length });
+    } catch (error) {
+      console.error('Error fetching jobs:', error);
+      res.status(500).json({ error: 'Failed to fetch jobs. Please try again.' });
+    }
+  });
+  
+  // GET endpoint
+  router.get('/indeed/indeed-jobs', async (req, res) => {
+    try {
       const jobs = await Job.find({}, { _id: 0 });
       res.json(jobs);
-  } catch (error) {
+    } catch (error) {
       console.error(error);
       res.status(500).json({ error: 'Error fetching job listings. Please try again.' });
-  }
-});
-
-app.listen(PORT, () => {
-  console.log(`Server is running on port ${PORT}`);
-});
-
+    }
+  });
+  
+  module.exports = router;

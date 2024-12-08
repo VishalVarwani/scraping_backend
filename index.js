@@ -1,26 +1,31 @@
-const { spawn } = require('child_process');
+const express = require('express');
+const cors = require('cors');
+const mongoose = require('mongoose');
 
-// Paths to your scripts
-const scripts = [
-    './linkedin.js',
-    './stepstone.js',
-    './glassdoor.js',
-    './indeed.js'
-];
+// Import scraper routes
+const linkedinRoutes = require('./linkedin');
+const stepstoneRoutes = require('./stepstone');
+const glassdoorRoutes = require('./glassdoor');
+const indeedRoutes = require('./indeed');
 
-// Start each script
-scripts.forEach((script) => {
-    const process = spawn('node', [script]);
+const app = express();
+const PORT = process.env.PORT || 3001;
 
-    process.stdout.on('data', (data) => {
-        console.log(`[${script}] ${data}`);
-    });
+// Middleware
+app.use(cors());
+app.use(express.json());
 
-    process.stderr.on('data', (data) => {
-        console.error(`[${script}] Error: ${data}`);
-    });
+// MongoDB connection
+const mongoUri = process.env.MONGO_URL_SCRAPING;
+mongoose.connect(mongoUri, { useNewUrlParser: true, useUnifiedTopology: true });
 
-    process.on('close', (code) => {
-        console.log(`[${script}] Process exited with code ${code}`);
-    });
+// Route handlers
+app.use('/api', linkedinRoutes);
+app.use('/api', stepstoneRoutes);
+app.use('/api', glassdoorRoutes);
+app.use('/api', indeedRoutes);
+
+// Start server
+app.listen(PORT, () => {
+    console.log(`Server running on http://localhost:${PORT}`);
 });
