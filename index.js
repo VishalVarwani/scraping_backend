@@ -12,7 +12,13 @@ const app = express();
 const PORT = process.env.PORT || 3001;
 
 // Middleware
-app.use(cors());
+const corsOptions = {
+    origin: ["http://localhost:3000", "https://jobscanner-pb9s.onrender.com"], // Replace with your frontend URL
+    methods: ["GET", "POST"],
+    credentials: true
+};
+
+app.use(cors(corsOptions));
 app.use(express.json());
 
 // MongoDB connection

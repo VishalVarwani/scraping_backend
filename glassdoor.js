@@ -3,18 +3,27 @@ const cheerio = require('cheerio');
 const express = require('express');
 const mongoose = require('mongoose');
 const cors = require('cors');
-require('dotenv').config()
+require('dotenv').config();
 const router = express.Router();
 
 const app = express();
 
 // Middleware
-app.use(cors());
+const corsOptions = {
+    origin: ["http://localhost:3000", "https://jobscanner-pb9s.onrender.com"], // Replace with your frontend URL
+    methods: ["GET", "POST"],
+    credentials: true,
+};
+
+app.use(cors(corsOptions));
 app.use(express.json());
 
 // MongoDB connection
 mongoose.connect(process.env.MONGO_URL_SCRAPING, { useNewUrlParser: true, useUnifiedTopology: true })
+    .then(() => console.log("MongoDB connected successfully."))
+    .catch((error) => console.error("MongoDB connection error:", error));
 
+// Define Job schema and model
 const jobSchema = new mongoose.Schema({
     role: String,
     company: String,
@@ -26,13 +35,13 @@ const jobSchema = new mongoose.Schema({
     searchLocation: String,
     status: String,
     salary: String,
-    logo: String
-
+    logo: String,
 }, { collection: 'glassdoorjobs' });
+
 const Job = mongoose.models.GlassdoorJob || mongoose.model('GlassdoorJob', jobSchema);
 
 // API key and base Glassdoor URL
-const apiKey = process.env.API_KEY
+const apiKey = process.env.API_KEY;
 const glassdoorUrl = 'https://www.glassdoor.de/Job/frankfurt-am-main-deutschland-software-engineer-jobs-SRCH_IL.0,29_IC2632180_KO30,47.htm';
 
 // Function to scrape a single page with user-specified job title and location
@@ -55,7 +64,6 @@ async function scrapePage(pageNumber, jobTitle, location) {
             const statuss = [];
             const companyLogos = [];
 
-
             $('div.JobCard_location__Ds1fM').each((_, element) => {
                 locations.push($(element).text().trim());
             });
@@ -76,20 +84,21 @@ async function scrapePage(pageNumber, jobTitle, location) {
             $('div.JobCard_listingAge__jJsuc').each((_, element) => {
                 jobPosted.push($(element).text().trim().replace('T', 'days'));
             });
+
             $('.JobCard_easyApplyTag__5vlo5').each((_, elem) => {
                 statuss.push($(elem).text().trim().replace('Schnell bewerben', 'Easy Apply'));
             });
-    
+
             $('.JobCard_salaryEstimate__QpbTW').each((_, elem) => {
                 const rawSalary = $(elem).text().trim();
                 salaries.push(rawSalary.replace(/\xa0/g, ' ')); // Replace non-breaking spaces with regular spaces
             });
+
             $('img.avatar-base_Image__2RcF9').each((_, elem) => {
                 const logoSrc = $(elem).attr('src');
                 companyLogos.push(logoSrc || null); // Add null if src is not found
             });
 
-            // Create job objects with jobTitle and location
             const jobs = [];
             for (let i = 0; i < roles.length; i++) {
                 jobs.push({
@@ -103,7 +112,7 @@ async function scrapePage(pageNumber, jobTitle, location) {
                     searchLocation: location || null,
                     status: statuss[i] || null,
                     salary: salaries[i] || null,
-                    logo: companyLogos[i] || null
+                    logo: companyLogos[i] || null,
                 });
             }
             return jobs;
@@ -127,12 +136,48 @@ async function scrapePages(jobTitle, location, startPage, endPage) {
     return allJobs;
 }
 
-/// Endpoint to fetch jobs
+// Upsert function using bulkWrite
+const upsertJobs = async (jobs) => {
+    const bulkOps = jobs.map((job) => ({
+        updateOne: {
+            filter: {
+                role: job.role,
+                company: job.company,
+                location: job.location,
+            }, // Match criteria
+            update: {
+                $set: {
+                    role: job.role,
+                    company: job.company,
+                    location: job.location,
+                    description: job.description,
+                    link: job.link,
+                    jobPosted: job.jobPosted,
+                    jobTitle: job.jobTitle,
+                    searchLocation: job.searchLocation,
+                    status: job.status,
+                    salary: job.salary,
+                    logo: job.logo,
+                },
+            },
+            upsert: true, // Perform upsert
+        },
+    }));
+
+    try {
+        const result = await Job.bulkWrite(bulkOps);
+        console.log(`Bulk upsert completed: ${result.upsertedCount} jobs inserted/updated.`);
+    } catch (error) {
+        console.error("Error in bulk upsert:", error);
+    }
+};
+
+// Endpoint to fetch jobs
 router.post('/glassdoor/fetch-jobs', async (req, res) => {
     const { job_title, location } = req.body;
 
     if (!job_title || !location) {
-        return res.status(400).json({ error: 'Job title and location are required.' });
+        return res.status(400).json({ error: "Job title and location are required." });
     }
 
     const startPage = 1;
@@ -140,15 +185,12 @@ router.post('/glassdoor/fetch-jobs', async (req, res) => {
 
     try {
         const jobs = await scrapePages(job_title, location, startPage, endPage);
+        await upsertJobs(jobs);
 
-        // Clear previous jobs and save new ones
-        await Job.deleteMany({});
-        await Job.insertMany(jobs);
-
-        res.json({ message: 'Job fetching completed', jobCount: jobs.length });
+        res.json({ message: "Job fetching and upserting completed", jobCount: jobs.length });
     } catch (error) {
-        console.error('Error fetching jobs:', error);
-        res.status(500).json({ error: 'Failed to fetch jobs. Please try again.' });
+        console.error("Error fetching jobs:", error);
+        res.status(500).json({ error: "Failed to fetch jobs. Please try again." });
     }
 });
 
@@ -158,8 +200,8 @@ router.get('/glassdoor/glassdoor-jobs', async (req, res) => {
         const jobs = await Job.find({}, { _id: 0 });
         res.json(jobs);
     } catch (error) {
-        console.error('Error fetching jobs:', error);
-        res.status(500).json({ error: 'Failed to retrieve jobs.' });
+        console.error("Error fetching jobs:", error);
+        res.status(500).json({ error: "Failed to retrieve jobs." });
     }
 });
 
