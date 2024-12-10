@@ -1,18 +1,19 @@
+// app.js
+
 const express = require('express');
 const mongoose = require('mongoose');
 const cors = require('cors');
 const axios = require('axios');
 const cheerio = require('cheerio'); // Use Cheerio for parsing
-require('dotenv').config();
-
+const router = express.Router();
+require('dotenv').config()
 const app = express();
-const PORT = process.env.PORT || 3001;
 
 // Middleware
 const corsOptions = {
     origin: ["http://localhost:3000", "https://jobscanner-pb9s.onrender.com"], // Replace with your frontend URL
     methods: ["GET", "POST"],
-    credentials: true,
+    credentials: true
 };
 
 app.use(cors(corsOptions));
@@ -20,8 +21,6 @@ app.use(express.json());
 
 // MongoDB connection
 mongoose.connect(process.env.MONGO_URL_SCRAPING, { useNewUrlParser: true, useUnifiedTopology: true })
-    .then(() => console.log('MongoDB connected successfully.'))
-    .catch((error) => console.error('MongoDB connection error:', error));
 
 // Define Job schema and model
 const jobSchema = new mongoose.Schema({
@@ -30,7 +29,7 @@ const jobSchema = new mongoose.Schema({
     Location: String,
     Link: String,
     Jobposted: String,
-    Imagesrc: String,
+    Imagesrc: String
 }, { collection: 'linkedinjobs' });
 
 const Job = mongoose.models.LinkedInJob || mongoose.model('LinkedInJob', jobSchema);
@@ -62,47 +61,18 @@ function parseJobListings(html) {
         const jobposted = $(job).find('time.job-search-card__listdate').text().trim();
         const imageSrc = $(job).find('img.artdeco-entity-image').attr('data-delayed-url');  // Select the data-delayed-url attribute
 
+
+
         if (jobTitle && company && location && link) {
-            jobs.push({ Title: jobTitle, Company: company, Location: location, Link: link, Jobposted: jobposted, Imagesrc: imageSrc });
+            jobs.push({ Title: jobTitle, Company: company, Location: location, Link: link , Jobposted: jobposted, Imagesrc: imageSrc});
         }
     });
 
     return jobs;
 }
 
-// Function to upsert jobs
-const upsertJobs = async (jobs) => {
-    const bulkOps = jobs.map((job) => ({
-        updateOne: {
-            filter: {
-                Title: job.Title,
-                Company: job.Company,
-                Location: job.Location,
-            }, // Match criteria (use unique fields)
-            update: {
-                $set: {
-                    Title: job.Title,
-                    Company: job.Company,
-                    Location: job.Location,
-                    Link: job.Link,
-                    Jobposted: job.Jobposted,
-                    Imagesrc: job.Imagesrc,
-                },
-            },
-            upsert: true, // Upsert option
-        },
-    }));
-
-    try {
-        const result = await Job.bulkWrite(bulkOps);
-        console.log(`Bulk upsert completed: ${result.upsertedCount} jobs inserted/updated.`);
-    } catch (error) {
-        console.error('Error in bulk upsert:', error);
-    }
-};
-
 // Endpoint to fetch jobs
-app.post('/linkedin/fetch-jobs', async (req, res) => {
+router.post('/linkedin/fetch-jobs', async (req, res) => {
     const jobTitle = req.body.job_title || 'developer';
     const location = req.body.location || 'india';
     const allJobs = [];
@@ -120,17 +90,17 @@ app.post('/linkedin/fetch-jobs', async (req, res) => {
             }
         }
 
-        await upsertJobs(allJobs);
+        await Job.deleteMany({});
+        await Job.insertMany(allJobs);
 
-        res.json({ message: 'Job fetching and upserting completed', jobCount: allJobs.length });
+        res.json({ message: 'Job fetching completed', jobCount: allJobs.length });
     } catch (error) {
         console.error(error);
-        res.status(500).json({ error: 'Failed to fetch and upsert jobs.' });
+        res.status(500).json({ error: 'Failed to fetch jobs.' });
     }
 });
 
-// Endpoint to retrieve jobs
-app.get('/linkedin/get-jobs', async (req, res) => {
+router.get('/linkedin/get-jobs', async (req, res) => {
     try {
         const jobs = await Job.find({}, { _id: 0 });
         res.json(jobs);
@@ -140,9 +110,4 @@ app.get('/linkedin/get-jobs', async (req, res) => {
     }
 });
 
-// Start the server
-app.listen(PORT, () => {
-    console.log(`Server is running on http://localhost:${PORT}`);
-});
-
-module.exports = app;
+module.exports = router;

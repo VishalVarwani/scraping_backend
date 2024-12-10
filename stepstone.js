@@ -3,7 +3,7 @@ const cheerio = require('cheerio');
 const express = require('express');
 const mongoose = require('mongoose');
 const cors = require('cors');
-require('dotenv').config();
+require('dotenv').config()
 const router = express.Router();
 
 const app = express();
@@ -12,7 +12,7 @@ const app = express();
 const corsOptions = {
     origin: ["http://localhost:3000", "https://jobscanner-pb9s.onrender.com"], // Replace with your frontend URL
     methods: ["GET", "POST"],
-    credentials: true,
+    credentials: true
 };
 
 app.use(cors(corsOptions));
@@ -20,10 +20,7 @@ app.use(express.json());
 
 // MongoDB connection
 mongoose.connect(process.env.MONGO_URL_SCRAPING, { useNewUrlParser: true, useUnifiedTopology: true })
-    .then(() => console.log("MongoDB connected successfully."))
-    .catch((error) => console.error("MongoDB connection error:", error));
 
-// Define Job schema and model
 const jobSchema = new mongoose.Schema({
     title: String,
     company: String,
@@ -31,14 +28,13 @@ const jobSchema = new mongoose.Schema({
     description: String,
     link: String,
     jobPosted: String,
-    imageSrc: String,
-    status: String,
-}, { collection: 'stepstonejobs' });
-
+    imageSrc: String, 
+    status: String
+},  { collection: 'stepstonejobs' });
 const Job = mongoose.models.StepStoneJob || mongoose.model('StepStoneJob', jobSchema);
 
 // API key and base URLs
-const apiKey = process.env.API_KEY;
+const apiKey = process.env.API_KEY
 const baseUrl = 'https://www.stepstone.de/work/{jobTitle}/in-{location}?whereType=autosuggest&radius=30&page=';
 const baseJobLink = 'https://www.stepstone.de';
 
@@ -56,6 +52,7 @@ async function scrapePage(pageNumber, jobTitle, location) {
         if (response.status === 200) {
             const $ = cheerio.load(response.data);
 
+            // Extract job details
             const locations = $('span.res-1qh7elo').map((_, el) => $(el).text().replace(/Partially remote/i, '').trim()).get();
             const companies = $('span.res-1fad2gj').map((_, el) => $(el).text().replace(/Show salary/i, '').trim()).get();
             const jobRoles = $('h2.res-1tassqi').map((_, el) => $(el).text().trim()).get();
@@ -72,7 +69,7 @@ async function scrapePage(pageNumber, jobTitle, location) {
                 }
                 return null;
             }).get();
-
+            // Create an array of job objects
             const jobs = jobRoles.map((role, index) => ({
                 title: role || null,
                 company: companies[index] || null,
@@ -81,9 +78,12 @@ async function scrapePage(pageNumber, jobTitle, location) {
                 link: jobLinks[index] || null,
                 jobPosted: daysPosted[index] || null,
                 imageSrc: imageSources[index] || null,
-                status: status[index] || null,
+                status: status[index] || null
+                
+
             }));
 
+            // Remove jobs with null Company or Location
             return jobs.filter(job => job.company && job.location);
         } else {
             console.error(`Failed to retrieve page ${pageNumber}. Status code: ${response.status}`);
@@ -105,39 +105,6 @@ async function scrapePages(jobTitle, location, startPage, endPage) {
     return allJobs;
 }
 
-// Upsert function using bulkWrite
-const upsertJobs = async (jobs) => {
-    const bulkOps = jobs.map((job) => ({
-        updateOne: {
-            filter: {
-                title: job.title,
-                company: job.company,
-                location: job.location,
-            }, // Match criteria
-            update: {
-                $set: {
-                    title: job.title,
-                    company: job.company,
-                    location: job.location,
-                    description: job.description,
-                    link: job.link,
-                    jobPosted: job.jobPosted,
-                    imageSrc: job.imageSrc,
-                    status: job.status,
-                },
-            },
-            upsert: true, // Perform upsert
-        },
-    }));
-
-    try {
-        const result = await Job.bulkWrite(bulkOps);
-        console.log(`Bulk upsert completed: ${result.upsertedCount} jobs inserted/updated.`);
-    } catch (error) {
-        console.error("Error in bulk upsert:", error);
-    }
-};
-
 // Endpoint to fetch and store jobs
 router.post('/stepstone/fetch-jobs', async (req, res) => {
     const jobTitle = req.body.job_title || 'developer';
@@ -147,9 +114,12 @@ router.post('/stepstone/fetch-jobs', async (req, res) => {
 
     try {
         const jobs = await scrapePages(jobTitle, location, startPage, endPage);
-        await upsertJobs(jobs);
 
-        res.json({ message: 'Job fetching and upserting completed', jobCount: jobs.length });
+        // Clear previous jobs and save new ones
+        await Job.deleteMany({});
+        await Job.insertMany(jobs);
+
+        res.json({ message: 'Job fetching completed', jobCount: jobs.length });
     } catch (error) {
         console.error('Error fetching jobs:', error);
         res.status(500).json({ error: 'Failed to fetch jobs. Please try again.' });
@@ -162,8 +132,8 @@ router.get('/stepstone/stepstone-jobs', async (req, res) => {
         const jobs = await Job.find({}, { _id: 0 });
         res.json(jobs);
     } catch (error) {
-        console.error("Error fetching jobs:", error);
-        res.status(500).json({ error: "Error fetching job listings. Please try again." });
+        console.error(error);
+        res.status(500).json({ error: 'Error fetching job listings. Please try again.' });
     }
 });
 
