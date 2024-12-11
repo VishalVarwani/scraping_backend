@@ -3,6 +3,8 @@ const cheerio = require('cheerio');
 const express = require('express');
 const mongoose = require('mongoose');
 const cors = require('cors');
+const pLimit = require('p-limit');
+
 require('dotenv').config()
 const router = express.Router();
 
@@ -124,14 +126,17 @@ async function scrapePage(pageNumber, jobTitle, location) {
 }
 
 // Function to scrape multiple pages with job title and location
-async function scrapePages(jobTitle, location, startPage, endPage) {
-    const allJobs = [];
-    for (let page = startPage; page <= endPage; page++) {
-        const jobs = await scrapePage(page, jobTitle, location);
-        allJobs.push(...jobs);
-    }
-    return allJobs;
-}
+const scrapeGlassdoorPagesWithLimit = async (jobTitle, location, startPage, endPage, maxWorkers = 10) => {
+    const limit = pLimit(maxWorkers);
+    const pageNumbers = Array.from({ length: endPage - startPage + 1 }, (_, i) => startPage + i);
+
+    // Wrap each scrapePage call in a limit to ensure controlled concurrency
+    const results = await Promise.all(
+        pageNumbers.map(page => limit(() => scrapePage(page, jobTitle, location)))
+    );
+
+    return results.flat();
+};
 
 /// Endpoint to fetch jobs
 router.post('/glassdoor/fetch-jobs', async (req, res) => {
@@ -145,7 +150,7 @@ router.post('/glassdoor/fetch-jobs', async (req, res) => {
     const endPage = 3;
 
     try {
-        const jobs = await scrapePages(job_title, location, startPage, endPage);
+        const jobs = await scrapeGlassdoorPagesWithLimit(job_title, location, startPage, endPage);
 
         // Clear previous jobs and save new ones
         await Job.deleteMany({});
