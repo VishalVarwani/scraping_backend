@@ -3,7 +3,6 @@ const cheerio = require('cheerio');
 const express = require('express');
 const mongoose = require('mongoose');
 const cors = require('cors');
-const pLimit = require('p-limit');
 
 require('dotenv').config()
 const router = express.Router();
@@ -98,17 +97,15 @@ async function scrapePage(pageNumber, jobTitle, location) {
 }
 
 // Function to scrape multiple pages
-const scrapeStepstonePagesWithLimit = async (jobTitle, location, startPage, endPage, maxWorkers = 10) => {
-    const limit = pLimit(maxWorkers);
+const scrapeStepstonePagesConcurrently = async (jobTitle, location, startPage, endPage, maxWorkers = 5) => {
     const pageNumbers = Array.from({ length: endPage - startPage + 1 }, (_, i) => startPage + i);
-
-    // Wrap each scrapePage call in a limit to ensure controlled concurrency
-    const results = await Promise.all(
-        pageNumbers.map(page => limit(() => scrapePage(page, jobTitle, location)))
-    );
-
+  
+    const workerTasks = pageNumbers.map((page) => scrapePage(jobTitle, location, page));
+    const results = await Promise.all(workerTasks);
+  
+    // Flatten the results
     return results.flat();
-};
+  };
 
 // Endpoint to fetch and store jobs
 router.post('/stepstone/fetch-jobs', async (req, res) => {
@@ -118,7 +115,7 @@ router.post('/stepstone/fetch-jobs', async (req, res) => {
     const endPage = 10;
 
     try {
-        const jobs = await scrapeStepstonePagesWithLimit(jobTitle, location, startPage, endPage);
+        const jobs = await scrapeStepstonePagesConcurrently(jobTitle, location, startPage, endPage);
 
         // Clear previous jobs and save new ones
         await Job.deleteMany({});
